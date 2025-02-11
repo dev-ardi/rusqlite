@@ -58,6 +58,7 @@ pub use fallible_iterator;
 pub use fallible_streaming_iterator;
 pub use libsqlite3_sys as ffi;
 
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::default::Default;
 use std::ffi::{CStr, CString};
@@ -184,6 +185,29 @@ macro_rules! params {
     ($($param:expr),+ $(,)?) => {
         &[$(&$param as &dyn $crate::ToSql),+] as &[&dyn $crate::ToSql]
     };
+}
+
+/// Use this when you need to create a string with a known number of placeholders in the form
+/// "?,?,?,?"
+#[must_use]
+pub fn placeholders(n: usize) -> Cow<'static, str> {
+    /// This has 100 placeholders
+    static PLACEHOLDERS: &str = "?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?";
+    if n < 100 {
+        Cow::Borrowed(&PLACEHOLDERS[..(n * 2).saturating_sub(1)])
+    } else {
+        /// This has much better codegen.
+        /// We mark this branch as unlikely and move the logic into a different
+        /// function that can't get inlined for better icache.
+        #[cold]
+        #[inline(never)]
+        fn cold(n: usize) -> Cow<'static, str> {
+            let mut res = "?,".repeat(n);
+            _ = res.pop();
+            Cow::Owned(res)
+        }
+        cold(n)
+    }
 }
 
 /// A macro making it more convenient to pass lists of named parameters
